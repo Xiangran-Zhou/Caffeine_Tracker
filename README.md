@@ -21,7 +21,11 @@ Caffeine Tracker is a macOS menu bar app for logging caffeine intake and viewing
 
 This app is intended to be downloaded and used as a macOS application (not cloned and built from source).
 
-1. Download the latest `Caffeine Tracker` app package from the project release page (for example a `.zip` containing `Caffeine Tracker.app`).
+Download here:
+
+- [Download Caffeine Tracker for macOS](https://github.com/Xiangran-Zhou/Caffeine_Tracker/releases/latest/download/Caffeine-Tracker-macOS.zip)
+
+1. Download the latest `Caffeine Tracker` app package from the release page (for example a `.zip` containing `Caffeine Tracker.app`).
 2. Unzip the download if needed.
 3. Drag `Caffeine Tracker.app` into your `Applications` folder.
 4. Open the app from `Applications`.
