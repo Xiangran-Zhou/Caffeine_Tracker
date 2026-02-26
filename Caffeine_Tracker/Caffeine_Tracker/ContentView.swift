@@ -11,6 +11,9 @@ import AppKit
 struct ContentView: View {
     @StateObject private var viewModel = CaffeineTrackerViewModel()
     @State private var isProfileSectionExpanded = false
+    @State private var isQuickPresetListExpanded = false
+    @State private var isBrandListExpanded = false
+    @State private var isBrandProductListExpanded = false
 
     private var todayListViewportHeight: CGFloat {
         let count = viewModel.todayRecords.count
@@ -23,41 +26,7 @@ struct ContentView: View {
             Text("Caffeine Tracker")
                 .font(.headline)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    statusBadge(
-                        title: viewModel.caffeineStatusSnapshot.currentState.badgeTitle,
-                        warningLevel: viewModel.caffeineStatusSnapshot.warningLevel
-                    )
-
-                    Spacer()
-                }
-
-                Text("Current estimate residual caffeine (mg)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("\(viewModel.estimatedResidualCaffeineMg, specifier: "%.1f") mg")
-                    .font(.title3.weight(.semibold))
-
-                Text(viewModel.caffeineStatusSnapshot.headlineText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text(viewModel.caffeineStatusSnapshot.supportingText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                Text(
-                    "At bedtime (\(viewModel.bedtimeReferenceDate, format: .dateTime.hour().minute())): ~\(viewModel.bedtimeResidualEstimateMg, specifier: "%.1f") mg"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-
-            Text("Half-life estimate: 5 hours")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            heroStatusSection
 
             Divider()
 
@@ -150,7 +119,7 @@ struct ContentView: View {
             }
         }
         .padding()
-        .frame(width: 430)
+        .frame(width: 460)
     }
 
     @ViewBuilder
@@ -181,17 +150,46 @@ struct ContentView: View {
         selectedID: Binding<String?>,
         selectedItem: DrinkCatalogItem?
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Picker(title, selection: selectedID) {
-                Text("Select \(title)")
-                    .tag(nil as String?)
+        let quickPresetListHeight = min(max(CGFloat(items.count) * 34, 44), 140)
 
-                ForEach(items) { item in
-                    Text("\(item.displayTitle) (\(Int(item.caffeineMg)) mg)")
-                        .tag(item.id as String?)
+        return VStack(alignment: .leading, spacing: 6) {
+            inlineSelectionField(
+                label: title,
+                selectedText: selectedItem.map { "\($0.displayTitle) (\(Int($0.caffeineMg)) mg)" } ?? "Select \(title)",
+                isExpanded: $isQuickPresetListExpanded
+            ) {
+                Button("Clear Selection") {
+                    selectedID.wrappedValue = nil
+                    isQuickPresetListExpanded = false
                 }
+                .buttonStyle(.plain)
+
+                Divider()
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(items) { item in
+                            Button {
+                                selectedID.wrappedValue = item.id
+                                isQuickPresetListExpanded = false
+                            } label: {
+                                HStack {
+                                    Text("\(item.displayTitle) (\(Int(item.caffeineMg)) mg)")
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.gray.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+                .frame(height: quickPresetListHeight)
             }
-            .pickerStyle(.menu)
 
             if let selectedItem {
                 Text("Auto-filled from \(selectedItem.sourceName) (\(selectedItem.sourceType.displayName))")
@@ -208,34 +206,63 @@ struct ContentView: View {
     private var brandProductsSelectionSection: some View {
         let selectedPreset = viewModel.selectedBrandProductPreset
         let brandProducts = viewModel.products(for: viewModel.selectedBrandName)
+        let brandProductListHeight = min(max(CGFloat(brandProducts.count) * 34, 44), 160)
 
         return VStack(alignment: .leading, spacing: 6) {
-            Picker(
-                "Brand",
-                selection: Binding(
-                    get: { viewModel.selectedBrandName },
-                    set: { viewModel.selectBrand($0) }
-                )
+            inlineLabeledSelectionField(
+                label: "Brand",
+                selectedText: viewModel.selectedBrandName.isEmpty ? "Select Brand" : viewModel.selectedBrandName,
+                isExpanded: $isBrandListExpanded
             ) {
                 ForEach(viewModel.availableBrands, id: \.self) { brand in
-                    Text(brand).tag(brand)
+                    Button {
+                        viewModel.selectBrand(brand)
+                        isBrandListExpanded = false
+                        isBrandProductListExpanded = false
+                    } label: {
+                        HStack {
+                            Text(brand)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.gray.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
-            .pickerStyle(.menu)
 
-            Picker(
-                "Product",
-                selection: Binding(
-                    get: { viewModel.selectedBrandProductPresetID },
-                    set: { viewModel.selectBrandProduct($0) }
-                )
+            inlineLabeledSelectionField(
+                label: "Product",
+                selectedText: selectedPreset.map { "\($0.displayName) (\(Int($0.caffeineMg)) mg)" } ?? "Select Product",
+                isExpanded: $isBrandProductListExpanded
             ) {
-                ForEach(brandProducts) { preset in
-                    Text("\(preset.displayName) (\(Int(preset.caffeineMg)) mg)")
-                        .tag(preset.id as String?)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(brandProducts) { preset in
+                            Button {
+                                viewModel.selectBrandProduct(preset.id)
+                                isBrandProductListExpanded = false
+                            } label: {
+                                HStack {
+                                    Text("\(preset.displayName) (\(Int(preset.caffeineMg)) mg)")
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.gray.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
                 }
+                .frame(height: brandProductListHeight)
             }
-            .pickerStyle(.menu)
 
             if let selectedPreset {
                 Text("Auto-filled from \(selectedPreset.sourceName) [\(selectedPreset.region)]")
@@ -303,18 +330,12 @@ struct ContentView: View {
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
 
-                        Picker(
-                            "Height Unit",
-                            selection: Binding(
-                                get: { viewModel.userProfile.heightUnit },
-                                set: { viewModel.setProfileHeightUnit($0) }
-                            )
-                        ) {
-                            ForEach(HeightUnit.allCases) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .pickerStyle(.menu)
+                        Text(viewModel.userProfile.heightUnit.rawValue)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color.gray.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
                     Text("Height is stored for profile only and is not used in caffeine calculations yet.")
@@ -370,6 +391,197 @@ struct ContentView: View {
         )
     }
 
+    private var heroStatusSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current estimated active caffeine")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text("\(viewModel.estimatedResidualCaffeineMg, specifier: "%.1f") mg")
+                            .font(.title2.weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    statusBadge(
+                        title: viewModel.caffeineStatusSnapshot.currentState.badgeTitle,
+                        warningLevel: viewModel.caffeineStatusSnapshot.warningLevel
+                    )
+                }
+
+                Text(viewModel.caffeineStatusSnapshot.headlineText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(viewModel.caffeineStatusSnapshot.supportingText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text("Estimated / half-life based. Reference only.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(Color.gray.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            quickInsightsRow
+            gaugesSection
+        }
+    }
+
+    private var quickInsightsRow: some View {
+        HStack(spacing: 8) {
+            insightTile(
+                title: "Today Total",
+                value: "\(formatted(viewModel.todayTotalCaffeineMg, "%.0f")) mg",
+                subtitle: "Logged today"
+            )
+
+            insightTile(
+                title: "At Bedtime",
+                value: "~\(formatted(viewModel.bedtimeResidualEstimateMg, "%.0f")) mg",
+                subtitle: viewModel.bedtimeReferenceDate.formatted(.dateTime.hour().minute())
+            )
+
+            if let mgPerKg = viewModel.latestIntakeMgPerKg {
+                insightTile(
+                    title: "Latest mg/kg",
+                    value: formatted(mgPerKg, "%.2f"),
+                    subtitle: "Estimate"
+                )
+            } else if let latest = viewModel.latestIntakeRecord {
+                insightTile(
+                    title: "Last Intake",
+                    value: "\(formatted(latest.caffeineMg, "%.0f")) mg",
+                    subtitle: latest.consumedAt.formatted(.dateTime.hour().minute())
+                )
+            } else {
+                insightTile(
+                    title: "Last Intake",
+                    value: "None",
+                    subtitle: "No records"
+                )
+            }
+        }
+    }
+
+    private var gaugesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            gaugeCard(
+                title: "Today Total vs Daily Reference",
+                value: viewModel.todayTotalCaffeineMg,
+                range: 0...viewModel.dailyReferenceMg,
+                valueText: "\(formatted(viewModel.todayTotalCaffeineMg, "%.0f")) mg",
+                maxText: "\(formatted(viewModel.dailyReferenceMg, "%.0f")) mg",
+                caption: "General adult daily reference shown for context."
+            )
+
+            if let latestMgPerKg = viewModel.latestIntakeMgPerKg {
+                gaugeCard(
+                    title: "Latest Intake mg/kg (Reference Context)",
+                    value: latestMgPerKg,
+                    range: 0...viewModel.weightBasedSingleDoseReferenceMgPerKg,
+                    valueText: "\(formatted(latestMgPerKg, "%.2f")) mg/kg",
+                    maxText: "\(formatted(viewModel.weightBasedSingleDoseReferenceMgPerKg, "%.1f")) mg/kg",
+                    caption: "Weight-based hint is an estimate and not medical advice."
+                )
+            } else {
+                gaugeCard(
+                    title: "Current Residual Visual Scale",
+                    value: viewModel.estimatedResidualCaffeineMg,
+                    range: 0...viewModel.residualVisualScaleMaxMg,
+                    valueText: "\(formatted(viewModel.estimatedResidualCaffeineMg, "%.1f")) mg",
+                    maxText: "\(formatted(viewModel.residualVisualScaleMaxMg, "%.0f")) mg",
+                    caption: "Visual scale for reference; not a limit or diagnosis."
+                )
+            }
+        }
+    }
+
+    private func insightTile(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.gray.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func gaugeCard(
+        title: String,
+        value: Double,
+        range: ClosedRange<Double>,
+        valueText: String,
+        maxText: String,
+        caption: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            metricGauge(
+                value: min(max(value, range.lowerBound), range.upperBound),
+                range: range,
+                valueText: valueText,
+                maxText: maxText
+            )
+
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(Color.gray.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func metricGauge(
+        value: Double,
+        range: ClosedRange<Double>,
+        valueText: String,
+        maxText: String
+    ) -> some View {
+        if #available(macOS 13.0, *) {
+            Gauge(value: value, in: range) {
+                EmptyView()
+            } currentValueLabel: {
+                Text(valueText)
+                    .font(.caption)
+            } minimumValueLabel: {
+                Text("0")
+                    .font(.caption2)
+            } maximumValueLabel: {
+                Text(maxText)
+                    .font(.caption2)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: value, total: range.upperBound)
+                Text("\(valueText) / \(maxText)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private func statusBadge(title: String, warningLevel: CaffeineStatusWarningLevel) -> some View {
         Text(title)
             .font(.caption.weight(.semibold))
@@ -392,6 +604,90 @@ struct ContentView: View {
             return .red
         }
     }
+
+    private func formatted(_ value: Double, _ format: String) -> String {
+        String(format: format, value)
+    }
+
+    private func inlineSelectionField<Content: View>(
+        label: String,
+        selectedText: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder options: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                isExpanded.wrappedValue.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Text(selectedText)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.gray.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+
+            if isExpanded.wrappedValue {
+                VStack(alignment: .leading, spacing: 4) {
+                    options()
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
+    private func inlineLabeledSelectionField<Content: View>(
+        label: String,
+        selectedText: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder options: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(label)
+                    .frame(width: 58, alignment: .leading)
+
+                Button {
+                    isExpanded.wrappedValue.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(selectedText)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.gray.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isExpanded.wrappedValue {
+                VStack(alignment: .leading, spacing: 4) {
+                    options()
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.leading, 66)
+            }
+        }
+    }
+
 }
 
 #Preview {

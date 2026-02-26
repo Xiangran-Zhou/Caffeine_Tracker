@@ -34,6 +34,9 @@ final class CaffeineTrackerViewModel: ObservableObject {
     @Published private(set) var records: [IntakeRecord] = []
 
     let halfLifeHours: Double = 5.0
+    let dailyReferenceMg: Double = 400
+    let residualVisualScaleMaxMg: Double = 400
+    let weightBasedSingleDoseReferenceMgPerKg: Double = 3.0
     let catalogItems: [DrinkCatalogItem] = DrinkCatalog.mvpItems
     let brandProductPresetsUS: [BrandProductPreset] = BrandProductSeed.us
 
@@ -119,6 +122,27 @@ final class CaffeineTrackerViewModel: ObservableObject {
 
     var bedtimeReferenceDate: Date {
         nextBedtimeReferenceDate(from: Date())
+    }
+
+    var todayTotalCaffeineMg: Double {
+        todayRecords.reduce(0) { $0 + $1.caffeineMg }
+    }
+
+    var latestIntakeRecord: IntakeRecord? {
+        latestIntakeTime.flatMap { latest in
+            records.first(where: { $0.consumedAt == latest })
+        }
+    }
+
+    var latestIntakeMgPerKg: Double? {
+        guard userProfile.useWeightBasedHints else { return nil }
+        guard let latestMg = latestIntakeRecord?.caffeineMg else { return nil }
+        guard let weightKg = profileWeightKg, weightKg > 0 else { return nil }
+        return latestMg / weightKg
+    }
+
+    var shouldShowWeightBasedHintGauge: Bool {
+        latestIntakeMgPerKg != nil
     }
 
     func addIntake() {
@@ -243,6 +267,16 @@ final class CaffeineTrackerViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return nil }
         guard let value = Double(trimmed), value > 0 else { return nil }
         return value
+    }
+
+    private var profileWeightKg: Double? {
+        guard let weight = userProfile.weightValue, weight > 0 else { return nil }
+        switch userProfile.weightUnit {
+        case .kg:
+            return weight
+        case .lb:
+            return weight * 0.45359237
+        }
     }
 
     private func fillInput(with item: DrinkCatalogItem) {
