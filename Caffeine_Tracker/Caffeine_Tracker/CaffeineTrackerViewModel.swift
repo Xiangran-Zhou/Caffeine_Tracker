@@ -28,6 +28,9 @@ final class CaffeineTrackerViewModel: ObservableObject {
     @Published var selectedBrandProductPresetID: BrandProductPreset.ID?
     @Published var inputCaffeineMgText: String = ""
     @Published var selectedIntakeTime: Date = Date()
+    @Published var userProfile: UserProfile = .default()
+    @Published var profileWeightText: String = ""
+    @Published var profileHeightText: String = ""
     @Published private(set) var records: [IntakeRecord] = []
 
     let halfLifeHours: Double = 5.0
@@ -36,6 +39,7 @@ final class CaffeineTrackerViewModel: ObservableObject {
 
     private let userDefaults: UserDefaults
     private let storageKey = "caffeine_tracker_intake_records_v1"
+    private let userProfileStorageKey = "caffeine_tracker_user_profile_v1"
     private let calendar = Calendar.current
 
     init(userDefaults: UserDefaults = .standard) {
@@ -44,6 +48,7 @@ final class CaffeineTrackerViewModel: ObservableObject {
         self.userDefaults.removeObject(forKey: storageKey)
 #endif
         loadRecords()
+        loadUserProfile()
         configureDefaultBrandSelection()
     }
 
@@ -91,9 +96,29 @@ final class CaffeineTrackerViewModel: ObservableObject {
 
     var estimatedResidualCaffeineMg: Double {
         let now = Date()
-        return records.reduce(0) { partialResult, record in
-            partialResult + estimatedResidual(for: record, at: now)
-        }
+        return estimatedResidualCaffeineMg(at: now)
+    }
+
+    var latestIntakeTime: Date? {
+        records.max(by: { $0.consumedAt < $1.consumedAt })?.consumedAt
+    }
+
+    var caffeineStatusSnapshot: CaffeineStatusSnapshot {
+        CaffeineStatusEngine.evaluate(
+            intakeRecords: records,
+            now: Date(),
+            currentResidualMg: estimatedResidualCaffeineMg,
+            latestIntakeTime: latestIntakeTime,
+            userProfile: userProfile
+        )
+    }
+
+    var bedtimeResidualEstimateMg: Double {
+        estimatedResidualCaffeineMg(at: nextBedtimeReferenceDate(from: Date()))
+    }
+
+    var bedtimeReferenceDate: Date {
+        nextBedtimeReferenceDate(from: Date())
     }
 
     func addIntake() {
@@ -144,6 +169,50 @@ final class CaffeineTrackerViewModel: ObservableObject {
         fillInput(with: preset)
     }
 
+    func saveUserProfile() {
+        userProfile.weightValue = parsedOptionalPositiveDouble(from: profileWeightText)
+        userProfile.heightValue = parsedOptionalPositiveDouble(from: profileHeightText)
+        userProfile.bedtime = normalizedToTodayTime(userProfile.bedtime)
+
+        guard let data = try? JSONEncoder().encode(userProfile) else { return }
+        userDefaults.set(data, forKey: userProfileStorageKey)
+    }
+
+    func setProfileWeightUnit(_ unit: WeightUnit) {
+        userProfile.weightUnit = unit
+        saveUserProfile()
+    }
+
+    func setProfileHeightUnit(_ unit: HeightUnit) {
+        userProfile.heightUnit = unit
+        saveUserProfile()
+    }
+
+    func setProfileBedtime(_ bedtime: Date) {
+        userProfile.bedtime = bedtime
+        saveUserProfile()
+    }
+
+    func setProfileSensitivityLevel(_ level: SensitivityLevel) {
+        userProfile.sensitivityLevel = level
+        saveUserProfile()
+    }
+
+    func setUseWeightBasedHints(_ enabled: Bool) {
+        userProfile.useWeightBasedHints = enabled
+        saveUserProfile()
+    }
+
+    func setProfileWeightText(_ text: String) {
+        profileWeightText = text
+        saveUserProfile()
+    }
+
+    func setProfileHeightText(_ text: String) {
+        profileHeightText = text
+        saveUserProfile()
+    }
+
     func useManualInputMode() {
         addInputMode = .manualInput
     }
@@ -161,6 +230,19 @@ final class CaffeineTrackerViewModel: ObservableObject {
 
         let decayFactor = pow(0.5, elapsedHours / halfLifeHours)
         return record.caffeineMg * decayFactor
+    }
+
+    private func estimatedResidualCaffeineMg(at date: Date) -> Double {
+        records.reduce(0) { partialResult, record in
+            partialResult + estimatedResidual(for: record, at: date)
+        }
+    }
+
+    private func parsedOptionalPositiveDouble(from text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = Double(trimmed), value > 0 else { return nil }
+        return value
     }
 
     private func fillInput(with item: DrinkCatalogItem) {
@@ -189,6 +271,23 @@ final class CaffeineTrackerViewModel: ObservableObject {
         ) ?? today
     }
 
+    private func nextBedtimeReferenceDate(from now: Date) -> Date {
+        let bedtimeComponents = calendar.dateComponents([.hour, .minute], from: userProfile.bedtime)
+
+        let todayBedtime = calendar.date(
+            bySettingHour: bedtimeComponents.hour ?? 23,
+            minute: bedtimeComponents.minute ?? 30,
+            second: 0,
+            of: now
+        ) ?? now
+
+        if todayBedtime > now {
+            return todayBedtime
+        }
+
+        return calendar.date(byAdding: .day, value: 1, to: todayBedtime) ?? todayBedtime
+    }
+
     private func loadRecords() {
         guard let data = userDefaults.data(forKey: storageKey) else {
             records = []
@@ -201,6 +300,45 @@ final class CaffeineTrackerViewModel: ObservableObject {
         } catch {
             records = []
         }
+    }
+
+    private func loadUserProfile() {
+        guard let data = userDefaults.data(forKey: userProfileStorageKey) else {
+            userProfile = .default()
+            syncProfileInputTextFromModel()
+            return
+        }
+
+        do {
+            userProfile = try JSONDecoder().decode(UserProfile.self, from: data)
+        } catch {
+            userProfile = .default()
+        }
+
+        userProfile.bedtime = normalizedToTodayTime(userProfile.bedtime)
+        syncProfileInputTextFromModel()
+    }
+
+    private func syncProfileInputTextFromModel() {
+        if let weightValue = userProfile.weightValue {
+            profileWeightText = formatProfileNumber(weightValue)
+        } else {
+            profileWeightText = ""
+        }
+
+        if let heightValue = userProfile.heightValue {
+            profileHeightText = formatProfileNumber(heightValue)
+        } else {
+            profileHeightText = ""
+        }
+    }
+
+    private func formatProfileNumber(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(Int(value))
+        }
+
+        return String(format: "%.1f", value)
     }
 
     private func saveRecords() {

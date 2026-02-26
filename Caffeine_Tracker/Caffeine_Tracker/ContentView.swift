@@ -10,6 +10,7 @@ import AppKit
 
 struct ContentView: View {
     @StateObject private var viewModel = CaffeineTrackerViewModel()
+    @State private var isProfileSectionExpanded = false
 
     private var todayListViewportHeight: CGFloat {
         let count = viewModel.todayRecords.count
@@ -23,12 +24,35 @@ struct ContentView: View {
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    statusBadge(
+                        title: viewModel.caffeineStatusSnapshot.currentState.badgeTitle,
+                        warningLevel: viewModel.caffeineStatusSnapshot.warningLevel
+                    )
+
+                    Spacer()
+                }
+
                 Text("Current estimate residual caffeine (mg)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Text("\(viewModel.estimatedResidualCaffeineMg, specifier: "%.1f") mg")
                     .font(.title3.weight(.semibold))
+
+                Text(viewModel.caffeineStatusSnapshot.headlineText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(viewModel.caffeineStatusSnapshot.supportingText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text(
+                    "At bedtime (\(viewModel.bedtimeReferenceDate, format: .dateTime.hour().minute())): ~\(viewModel.bedtimeResidualEstimateMg, specifier: "%.1f") mg"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
 
             Text("Half-life estimate: 5 hours")
@@ -67,6 +91,10 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!viewModel.canAddIntake)
             }
+
+            Divider()
+
+            profileSection
 
             Divider()
 
@@ -231,6 +259,137 @@ struct ContentView: View {
         }
         .onAppear {
             viewModel.applySelectedBrandProductIfAvailable()
+        }
+    }
+
+    private var profileSection: some View {
+        DisclosureGroup(
+            isExpanded: $isProfileSectionExpanded,
+            content: {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        TextField(
+                            "Weight",
+                            text: Binding(
+                                get: { viewModel.profileWeightText },
+                                set: { viewModel.setProfileWeightText($0) }
+                            )
+                        )
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+
+                        Picker(
+                            "Weight Unit",
+                            selection: Binding(
+                                get: { viewModel.userProfile.weightUnit },
+                                set: { viewModel.setProfileWeightUnit($0) }
+                            )
+                        ) {
+                            ForEach(WeightUnit.allCases) { unit in
+                                Text(unit.rawValue.uppercased()).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    HStack(spacing: 8) {
+                        TextField(
+                            "Height",
+                            text: Binding(
+                                get: { viewModel.profileHeightText },
+                                set: { viewModel.setProfileHeightText($0) }
+                            )
+                        )
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+
+                        Picker(
+                            "Height Unit",
+                            selection: Binding(
+                                get: { viewModel.userProfile.heightUnit },
+                                set: { viewModel.setProfileHeightUnit($0) }
+                            )
+                        ) {
+                            ForEach(HeightUnit.allCases) { unit in
+                                Text(unit.rawValue).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    Text("Height is stored for profile only and is not used in caffeine calculations yet.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    DatePicker(
+                        "Bedtime",
+                        selection: Binding(
+                            get: { viewModel.userProfile.bedtime },
+                            set: { viewModel.setProfileBedtime($0) }
+                        ),
+                        displayedComponents: [.hourAndMinute]
+                    )
+                    .datePickerStyle(.stepperField)
+
+                    Picker(
+                        "Sensitivity",
+                        selection: Binding(
+                            get: { viewModel.userProfile.sensitivityLevel },
+                            set: { viewModel.setProfileSensitivityLevel($0) }
+                        )
+                    ) {
+                        ForEach(SensitivityLevel.allCases) { level in
+                            Text(level.displayName).tag(level)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Toggle(
+                        "Use weight-based hints",
+                        isOn: Binding(
+                            get: { viewModel.userProfile.useWeightBasedHints },
+                            set: { viewModel.setUseWeightBasedHints($0) }
+                        )
+                    )
+
+                    HStack {
+                        Spacer()
+
+                        Button("Save Profile") {
+                            viewModel.saveUserProfile()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.top, 6)
+            },
+            label: {
+                Text("Profile & Preferences")
+                    .font(.subheadline.weight(.medium))
+            }
+        )
+    }
+
+    private func statusBadge(title: String, warningLevel: CaffeineStatusWarningLevel) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(statusBadgeColor(for: warningLevel).opacity(0.18))
+            .foregroundStyle(statusBadgeColor(for: warningLevel))
+            .clipShape(Capsule())
+    }
+
+    private func statusBadgeColor(for level: CaffeineStatusWarningLevel) -> Color {
+        switch level {
+        case .none:
+            return .secondary
+        case .mild:
+            return .blue
+        case .moderate:
+            return .orange
+        case .high:
+            return .red
         }
     }
 }
