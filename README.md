@@ -1,6 +1,7 @@
 # Caffeine Tracker
 
 Caffeine Tracker is a macOS menu bar app for logging caffeine intake and viewing an estimated active caffeine level over time using a simple half-life model.
+<img width="476" height="982" alt="Screenshot 2026-02-25 at 11 22 24 PM" src="https://github.com/user-attachments/assets/032aff21-e811-4762-a481-39e4f733a5c8" />
 
 ## Features
 
