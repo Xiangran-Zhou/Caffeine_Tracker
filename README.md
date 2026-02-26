@@ -17,32 +17,37 @@ Caffeine Tracker is a macOS menu bar app for logging caffeine intake and viewing
 - User profile & preferences (weight, bedtime, sensitivity)
 - Local storage on device (`UserDefaults`)
 
-## Download & Install (App Users)
+## Run Locally (Recommended for This Project)
 
-This app is intended to be downloaded and used as a macOS application (not cloned and built from source).
+This is a learning / practice project. The recommended way to use it is to run it locally from source in Xcode.
 
-Download here:
+### Option A: Clone and Run in Xcode (Recommended)
 
-- [Download Caffeine Tracker for macOS](https://github.com/Xiangran-Zhou/Caffeine_Tracker/releases/latest/download/Caffeine-Tracker-macOS.zip)
+1. Clone the repository:
+   - `git clone https://github.com/Xiangran-Zhou/Caffeine_Tracker.git`
+2. Open the project in Xcode:
+   - `Caffeine_Tracker/Caffeine_Tracker/Caffeine_Tracker.xcodeproj`
+3. Select `My Mac` as the run destination.
+4. Build and run (`Command + R`).
+5. Click the coffee cup icon in the macOS menu bar to open the app panel.
 
-1. Download the latest `Caffeine Tracker` app package from the release page (for example a `.zip` containing `Caffeine Tracker.app`).
-2. Unzip the download if needed.
-3. Drag `Caffeine Tracker.app` into your `Applications` folder.
-4. Open the app from `Applications`.
+### Option B: Download Source ZIP from GitHub
 
-## First Launch (macOS Trust / Security Prompt)
+If you do not want to use Git:
 
-Because the app may be downloaded from the internet, macOS may block it on first launch.
+1. Open the repository page:
+   - [Caffeine Tracker Repository](https://github.com/Xiangran-Zhou/Caffeine_Tracker)
+2. Click `Code` -> `Download ZIP`
+3. Unzip the project
+4. Open `Caffeine_Tracker/Caffeine_Tracker/Caffeine_Tracker.xcodeproj` in Xcode
+5. Run with `My Mac`
 
-If macOS shows a warning:
+## macOS First-Run Notes (Local Build)
 
-1. Try opening the app once (it may be blocked).
-2. Open `System Settings` -> `Privacy & Security`.
-3. Find the message about `Caffeine Tracker` being blocked.
-4. Click `Open Anyway` (or confirm trust).
-5. Open the app again and confirm.
-
-After this, the app should open normally.
+- If macOS shows a warning for your local build, use:
+  - `Right-click app -> Open`, or
+  - `System Settings -> Privacy & Security -> Open Anyway`
+- This project is not distributed as a notarized production app release.
 
 ## How to Use
 
