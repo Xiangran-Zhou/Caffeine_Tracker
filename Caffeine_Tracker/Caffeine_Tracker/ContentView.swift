@@ -11,6 +11,7 @@ import AppKit
 struct ContentView: View {
     @StateObject private var viewModel = CaffeineTrackerViewModel()
     @State private var isProfileSectionExpanded = false
+    @State private var isTimelineSectionExpanded = false
     @State private var isQuickPresetListExpanded = false
     @State private var isBrandListExpanded = false
     @State private var isBrandProductListExpanded = false
@@ -64,6 +65,10 @@ struct ContentView: View {
             Divider()
 
             profileSection
+
+            Divider()
+
+            todayTimelineSection
 
             Divider()
 
@@ -391,6 +396,55 @@ struct ContentView: View {
         )
     }
 
+    private var todayTimelineSection: some View {
+        DisclosureGroup(
+            isExpanded: $isTimelineSectionExpanded,
+            content: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(viewModel.todayTimelineSummaryText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if viewModel.todayTimelinePoints.isEmpty {
+                        Text("No timeline samples available yet.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Estimated residual trend (sampled)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            ScrollView {
+                                LazyVStack(spacing: 6) {
+                                    ForEach(Array(viewModel.todayTimelinePoints.suffix(10).reversed())) { point in
+                                        timelineRow(
+                                            point: point,
+                                            maxResidual: viewModel.todayTimelineMaxResidualMg
+                                        )
+                                    }
+                                }
+                            }
+                            .frame(height: 180)
+                        }
+                        .padding(8)
+                        .background(Color.gray.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+
+                    Text("Timeline is an estimate sampled from the same half-life model used in the app.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 6)
+            },
+            label: {
+                Text("Today Timeline")
+                    .font(.subheadline.weight(.medium))
+            }
+        )
+    }
+
     private var heroStatusSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
@@ -607,6 +661,44 @@ struct ContentView: View {
 
     private func formatted(_ value: Double, _ format: String) -> String {
         String(format: format, value)
+    }
+
+    private func timelineRow(point: TimelinePoint, maxResidual: Double) -> some View {
+        HStack(spacing: 8) {
+            Text(point.time, format: .dateTime.hour().minute())
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 58, alignment: .leading)
+
+            ProgressView(value: point.estimatedResidualMg, total: maxResidual)
+                .frame(maxWidth: .infinity)
+
+            Text("\(formatted(point.estimatedResidualMg, "%.0f")) mg")
+                .font(.caption2.weight(.medium))
+                .frame(width: 52, alignment: .trailing)
+
+            if point.isNowMarker {
+                markerChip("Now", color: .blue)
+            } else if point.isBedtimeMarker {
+                markerChip("Bed", color: .orange)
+            } else {
+                Color.clear.frame(width: 34, height: 18)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Color.gray.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func markerChip(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.16))
+            .foregroundStyle(color)
+            .clipShape(Capsule())
     }
 
     private func inlineSelectionField<Content: View>(

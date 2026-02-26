@@ -145,6 +145,22 @@ final class CaffeineTrackerViewModel: ObservableObject {
         latestIntakeMgPerKg != nil
     }
 
+    var todayTimelinePoints: [TimelinePoint] {
+        generateTimelinePoints(for: Date(), intervalMinutes: 15)
+    }
+
+    var todayTimelineMaxResidualMg: Double {
+        max(todayTimelinePoints.map(\.estimatedResidualMg).max() ?? 0, 1)
+    }
+
+    var todayTimelineSummaryText: String {
+        guard let first = todayTimelinePoints.first, let last = todayTimelinePoints.last else {
+            return "No timeline samples yet."
+        }
+
+        return "15-minute estimate samples from \(first.time.formatted(.dateTime.hour().minute())) to \(last.time.formatted(.dateTime.hour().minute()))."
+    }
+
     func addIntake() {
         guard let mg = parsedInputMg, mg > 0 else { return }
 
@@ -237,6 +253,48 @@ final class CaffeineTrackerViewModel: ObservableObject {
         saveUserProfile()
     }
 
+    func generateTimelinePoints(for day: Date, intervalMinutes: Int = 15) -> [TimelinePoint] {
+        guard intervalMinutes > 0 else { return [] }
+
+        let startOfDay = calendar.startOfDay(for: day)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return [] }
+
+        let now = Date()
+        let bedtimeToday = bedtimeDate(onSameDayAs: startOfDay)
+        let targetEnd = max(now, bedtimeToday)
+        let samplingEnd = min(targetEnd, endOfDay)
+
+        var points: [TimelinePoint] = []
+        var cursor = startOfDay
+
+        while cursor <= samplingEnd {
+            points.append(
+                TimelinePoint(
+                    time: cursor,
+                    estimatedResidualMg: estimatedResidualCaffeineMg(at: cursor),
+                    isNowMarker: isWithinMarkerWindow(cursor, target: now, intervalMinutes: intervalMinutes),
+                    isBedtimeMarker: isWithinMarkerWindow(cursor, target: bedtimeToday, intervalMinutes: intervalMinutes)
+                )
+            )
+
+            guard let next = calendar.date(byAdding: .minute, value: intervalMinutes, to: cursor) else { break }
+            cursor = next
+        }
+
+        if points.last?.time != samplingEnd {
+            points.append(
+                TimelinePoint(
+                    time: samplingEnd,
+                    estimatedResidualMg: estimatedResidualCaffeineMg(at: samplingEnd),
+                    isNowMarker: isWithinMarkerWindow(samplingEnd, target: now, intervalMinutes: intervalMinutes),
+                    isBedtimeMarker: isWithinMarkerWindow(samplingEnd, target: bedtimeToday, intervalMinutes: intervalMinutes)
+                )
+            )
+        }
+
+        return points.sorted { $0.time < $1.time }
+    }
+
     func useManualInputMode() {
         addInputMode = .manualInput
     }
@@ -277,6 +335,20 @@ final class CaffeineTrackerViewModel: ObservableObject {
         case .lb:
             return weight * 0.45359237
         }
+    }
+
+    private func bedtimeDate(onSameDayAs day: Date) -> Date {
+        let bedtimeComponents = calendar.dateComponents([.hour, .minute], from: userProfile.bedtime)
+        return calendar.date(
+            bySettingHour: bedtimeComponents.hour ?? 23,
+            minute: bedtimeComponents.minute ?? 30,
+            second: 0,
+            of: day
+        ) ?? day
+    }
+
+    private func isWithinMarkerWindow(_ value: Date, target: Date, intervalMinutes: Int) -> Bool {
+        abs(value.timeIntervalSince(target)) <= TimeInterval(intervalMinutes * 60) / 2
     }
 
     private func fillInput(with item: DrinkCatalogItem) {
